@@ -17,34 +17,64 @@ __global__ void dynamic_voxelize_kernel(
     const float coors_z_min, const float coors_x_max, const float coors_y_max,
     const float coors_z_max, const int grid_x, const int grid_y,
     const int grid_z, const int num_points, const int num_features,
-    const int NDim) {
+    const int NDim, const bool remove_outside_points) {
   //   const int index = blockIdx.x * threadsPerBlock + threadIdx.x;
   CUDA_1D_KERNEL_LOOP(index, num_points) {
     // To save some computation
     auto points_offset = points + index * num_features;
     auto coors_offset = coors + index * NDim;
     int c_x = floorf((points_offset[0] - coors_x_min) / voxel_x);
-    if (c_x < 0 || c_x >= grid_x) {
-      coors_offset[0] = -1;
-      continue;
+    if (remove_outside_points) {
+      if (c_x < 0 || c_x >= grid_x) {
+        coors_offset[0] = -1;
+        continue;
+      }
+    } else {
+      if (c_x < 0) {
+        coors_offset[2] = 0;
+      } else if (c_x >= grid_x) {
+        coors_offset[2] = grid_x;
+      } else {
+        coors_offset[2] = c_x;
+      }
     }
 
     int c_y = floorf((points_offset[1] - coors_y_min) / voxel_y);
-    if (c_y < 0 || c_y >= grid_y) {
-      coors_offset[0] = -1;
-      coors_offset[1] = -1;
-      continue;
+    if (remove_outside_points) {
+      if (c_y < 0 || c_y >= grid_y) {
+        coors_offset[0] = -1;
+        coors_offset[1] = -1;
+        continue;
+      }
+    } else {
+      if (c_y < 0) {
+        coors_offset[1] = 0;
+      } else if (c_y >= grid_y) {
+        coors_offset[1] = grid_y;
+      } else {
+        coors_offset[1] = c_y;
+      }
     }
 
     int c_z = floorf((points_offset[2] - coors_z_min) / voxel_z);
-    if (c_z < 0 || c_z >= grid_z) {
-      coors_offset[0] = -1;
-      coors_offset[1] = -1;
-      coors_offset[2] = -1;
+    if (remove_outside_points) {
+      if (c_z < 0 || c_z >= grid_z) {
+        coors_offset[0] = -1;
+        coors_offset[1] = -1;
+        coors_offset[2] = -1;
+      } else {
+        coors_offset[0] = c_z;
+        coors_offset[1] = c_y;
+        coors_offset[2] = c_x;
+      }
     } else {
-      coors_offset[0] = c_z;
-      coors_offset[1] = c_y;
-      coors_offset[2] = c_x;
+      if (c_z < 0) {
+        coors_offset[0] = 0;
+      } else if (c_z >= grid_z) {
+        coors_offset[0] = grid_z;
+      } else {
+        coors_offset[0] = c_z;
+      }
     }
   }
 }

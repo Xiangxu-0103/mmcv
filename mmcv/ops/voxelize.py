@@ -1,5 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-from typing import Any, List, Tuple, Union
+from typing import Any, Optional, Sequence, Tuple, Union
 
 import torch
 from torch import nn
@@ -16,13 +16,15 @@ class _Voxelization(Function):
 
     @staticmethod
     def forward(
-            ctx: Any,
-            points: torch.Tensor,
-            voxel_size: Union[tuple, float],
-            coors_range: Union[tuple, float],
-            max_points: int = 35,
-            max_voxels: int = 20000,
-            deterministic: bool = True) -> Union[Tuple[torch.Tensor], Tuple]:
+        ctx: Any,
+        points: torch.Tensor,
+        voxel_size: Union[tuple, float],
+        coors_range: Union[tuple, float],
+        max_points: int = 35,
+        max_voxels: int = 20000,
+        deterministic: bool = True,
+        remove_outside_points: bool = True
+    ) -> Union[Tuple[torch.Tensor], Tuple]:
         """Convert kitti points(N, >=3) to voxels.
 
         Args:
@@ -32,13 +34,13 @@ class _Voxelization(Function):
                 [3].
             coors_range (tuple or float): The coordinate range of voxel with
                 the shape of [6].
-            max_points (int, optional): maximum points contained in a voxel. if
-                max_points=-1, it means using dynamic_voxelize. Default: 35.
-            max_voxels (int, optional): maximum voxels this function create.
-                for second, 20000 is a good choice. Users should shuffle points
-                before call this function because max_voxels may drop points.
-                Default: 20000.
-            deterministic: bool. whether to invoke the non-deterministic
+            max_points (int): Maximum points contained in a voxel. if
+                max_points=-1, it means using dynamic_voxelize. Defaults to 35.
+            max_voxels (int): Maximum voxels this function create. For SECOND,
+                20000 is a good choice. Users should shuffle points before call
+                this function because max_voxels may drop points.
+                Defaults to 20000.
+            deterministic (bool): Whether to invoke the non-deterministic
                 version of hard-voxelization implementations. non-deterministic
                 version is considerablly fast but is not deterministic. only
                 affects hard voxelization. default True. for more information
@@ -48,6 +50,9 @@ class _Voxelization(Function):
                 https://github.com/open-mmlab/mmdetection3d/pull/904
                 it is an experimental feature and we will appreciate it if
                 you could share with us the failing cases.
+            remove_outside_points (bool): Whether to drop points out of
+                coors_range. For voxel-based segmentation, we should set it to
+                False. Defaults to True.
 
         Returns:
             tuple[torch.Tensor]: tuple[torch.Tensor]: A tuple contains three
@@ -64,7 +69,8 @@ class _Voxelization(Function):
                 torch.tensor(voxel_size, dtype=torch.float),
                 torch.tensor(coors_range, dtype=torch.float),
                 coors,
-                NDim=3)
+                NDim=3,
+                remove_outside_points=remove_outside_points)
             return coors
         else:
             voxels = points.new_zeros(
@@ -102,45 +108,30 @@ class Voxelization(nn.Module):
     <https://arxiv.org/abs/1907.03739>`_ for more details.
 
     Args:
-        voxel_size (tuple or float): The size of voxel with the shape of [3].
-        point_cloud_range (tuple or float): The coordinate range of voxel with
+        point_cloud_range (Sequence[float]): The coordinate range of voxel with
             the shape of [6].
-        max_num_points (int): maximum points contained in a voxel. if
+        max_num_points (int): Maximum points contained in a voxel. if
             max_points=-1, it means using dynamic_voxelize.
-        max_voxels (int, optional): maximum voxels this function create.
-            for second, 20000 is a good choice. Users should shuffle points
-            before call this function because max_voxels may drop points.
-            Default: 20000.
+        voxel_size (Sequence[float], optional): The size of voxel with the
+            shape of [3]. Defaults to None.
+        grid_size (Sequence[int], optional): The grid size of voxel with the
+            shape of [3]. Usually used in voxel-based segmentation.
+            Defaults to None.
+        max_voxels (int): Maximum voxels this function create. For SECOND,
+            20000 is a good choice. Users should shuffle points before call
+            this function because max_voxels may drop points.
+            Defaults to 20000.
     """
 
     def __init__(self,
-                 voxel_size: List,
-                 point_cloud_range: List,
+                 point_cloud_range: Sequence[float],
                  max_num_points: int,
+                 voxel_size: Optional[Sequence[float]] = None,
+                 grid_size: Optional[Sequence[int]] = None,
                  max_voxels: Union[tuple, int] = 20000,
-                 deterministic: bool = True):
-        """
-        Args:
-            voxel_size (list): list [x, y, z] size of three dimension
-            point_cloud_range (list):
-                [x_min, y_min, z_min, x_max, y_max, z_max]
-            max_num_points (int): max number of points per voxel
-            max_voxels (tuple or int): max number of voxels in
-                (training, testing) time
-            deterministic: bool. whether to invoke the non-deterministic
-                version of hard-voxelization implementations. non-deterministic
-                version is considerablly fast but is not deterministic. only
-                affects hard voxelization. default True. for more information
-                of this argument and the implementation insights, please refer
-                to the following links:
-                https://github.com/open-mmlab/mmdetection3d/issues/894
-                https://github.com/open-mmlab/mmdetection3d/pull/904
-                it is an experimental feature and we will appreciate it if
-                you could share with us the failing cases.
-        """
+                 deterministic: bool = True) -> None:
         super().__init__()
 
-        self.voxel_size = voxel_size
         self.point_cloud_range = point_cloud_range
         self.max_num_points = max_num_points
         if isinstance(max_voxels, tuple):
@@ -149,14 +140,31 @@ class Voxelization(nn.Module):
             self.max_voxels = _pair(max_voxels)
         self.deterministic = deterministic
 
+        assert (voxel_size is None and grid_size is not None) or (
+            voxel_size is not None and grid_size is None
+        ), 'voxel_size and grid_size cannot be specified simultaneously.'
+
         point_cloud_range = torch.tensor(
             point_cloud_range, dtype=torch.float32)
-        voxel_size = torch.tensor(voxel_size, dtype=torch.float32)
-        grid_size = (
-            point_cloud_range[3:] -  # type: ignore
-            point_cloud_range[:3]) / voxel_size  # type: ignore
-        grid_size = torch.round(grid_size).long()
-        input_feat_shape = grid_size[:2]
+        if voxel_size:
+            self.remove_outside_points = True
+            voxel_size = torch.tensor(voxel_size, dtype=torch.float32)
+            grid_size = (
+                point_cloud_range[3:] -  # type: ignore
+                point_cloud_range[:3]) / voxel_size  # type: ignore
+            grid_size = torch.round(grid_size).long()
+        elif grid_size:
+            assert self.max_num_points == -1, \
+                'We only support dynamic_voxelization'
+            self.remove_outside_points = False
+            grid_size = torch.tensor(grid_size, dtype=torch.int32)
+            voxel_size = (
+                point_cloud_range[3:] -  # type: ignore
+                point_cloud_range[:3]) / (grid_size - 1)  # type: ignore
+        else:
+            raise ValueError('Both voxel_size and grid_size are None.')
+        self.voxel_size = voxel_size.tolist()  # type: ignore
+        input_feat_shape = grid_size[:2]  # type: ignore
         self.grid_size = grid_size
         # the origin shape is as [x-len, y-len, z-len]
         # [w, h, d] -> [d, h, w]
@@ -170,13 +178,14 @@ class Voxelization(nn.Module):
 
         return voxelization(input, self.voxel_size, self.point_cloud_range,
                             self.max_num_points, max_voxels,
-                            self.deterministic)
+                            self.deterministic, self.remove_outside_points)
 
     def __repr__(self):
         s = self.__class__.__name__ + '('
-        s += 'voxel_size=' + str(self.voxel_size)
-        s += ', point_cloud_range=' + str(self.point_cloud_range)
+        s += 'point_cloud_range=' + str(self.point_cloud_range)
         s += ', max_num_points=' + str(self.max_num_points)
+        s += ', voxel_size=' + str(self.voxel_size)
+        s += ', grid_size=' + str(self.grid_size)
         s += ', max_voxels=' + str(self.max_voxels)
         s += ', deterministic=' + str(self.deterministic)
         s += ')'

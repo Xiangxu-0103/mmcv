@@ -354,7 +354,7 @@ void hard_voxelize_forward(const at::Tensor &points,
 void dynamic_voxelize_forward(const at::Tensor &points,
                               const at::Tensor &voxel_size,
                               const at::Tensor &coors_range, at::Tensor &coors,
-                              const int NDim);
+                              const int NDim, const bool remove_outside_points);
 
 void border_align_forward(const Tensor &input, const Tensor &boxes,
                           Tensor output, Tensor argmax_idx,
@@ -794,7 +794,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         py::arg("deterministic"));
   m.def("dynamic_voxelize_forward", &dynamic_voxelize_forward,
         "dynamic_voxelize_forward", py::arg("points"), py::arg("voxel_size"),
-        py::arg("coors_range"), py::arg("coors"), py::arg("NDim"));
+        py::arg("coors_range"), py::arg("coors"), py::arg("NDim"),
+        py::arg("remove_outside_points"));
   m.def("ms_deform_attn_forward", &ms_deform_attn_forward,
         "forward function of multi-scale deformable attention",
         py::arg("value"), py::arg("value_spatial_shapes"),

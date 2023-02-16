@@ -15,6 +15,7 @@ void hard_voxelize_forward(const at::Tensor &points,
 void dynamic_voxelize_forward(const at::Tensor &points,
                               const at::Tensor &voxel_size,
                               const at::Tensor &coors_range, at::Tensor &coors,
-                              const int NDim = 3);
+                              const int NDim = 3,
+                              const bool remove_outside_points = true);
 
 #endif  // VOXELIZATION_PYTORCH_H

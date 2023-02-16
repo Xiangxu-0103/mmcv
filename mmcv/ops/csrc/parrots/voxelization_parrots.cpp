@@ -38,14 +38,19 @@ void dynamic_voxelize_forward_cuda_parrots(CudaContext& ctx,
                                            const OperatorBase::in_list_t& ins,
                                            OperatorBase::out_list_t& outs) {
   int NDim;
-  SSAttrs(attr).get<int>("NDim", NDim).done();
+  bool remove_outside_points;
+  SSAttrs(attr)
+      .get<int>("NDim", NDim)
+      .get<bool>("remove_outside_points", remove_outside_points)
+      .done();
   const auto& points = buildATensor(ctx, ins[0]);
   const auto& voxel_size = buildATensor(ctx, ins[1]);
   const auto& coors_range = buildATensor(ctx, ins[2]);
 
   auto coors = buildATensor(ctx, outs[0]);
 
-  dynamic_voxelize_forward(points, voxel_size, coors_range, coors, NDim);
+  dynamic_voxelize_forward(points, voxel_size, coors_range, coors, NDim,
+                           remove_outside_points);
 }
 #endif
 
@@ -79,14 +84,19 @@ void dynamic_voxelize_forward_cpu_parrots(HostContext& ctx,
                                           const OperatorBase::in_list_t& ins,
                                           OperatorBase::out_list_t& outs) {
   int NDim;
-  SSAttrs(attr).get<int>("NDim", NDim).done();
+  bool remove_outside_points;
+  SSAttrs(attr)
+      .get<int>("NDim", NDim)
+      .get<bool>("remove_outside_points", remove_outside_points)
+      .done();
   const auto& points = buildATensor(ctx, ins[0]);
   const auto& voxel_size = buildATensor(ctx, ins[1]);
   const auto& coors_range = buildATensor(ctx, ins[2]);
 
   auto coors = buildATensor(ctx, outs[0]);
 
-  dynamic_voxelize_forward(points, voxel_size, coors_range, coors, NDim);
+  dynamic_voxelize_forward(points, voxel_size, coors_range, coors, NDim,
+                           remove_outside_points);
 }
 
 PARROTS_EXTENSION_REGISTER(hard_voxelize_forward)
@@ -104,6 +114,7 @@ PARROTS_EXTENSION_REGISTER(hard_voxelize_forward)
 
 PARROTS_EXTENSION_REGISTER(dynamic_voxelize_forward)
     .attr("NDim")
+    .attr("remove_outside_points")
     .input(3)
     .output(1)
     .apply(dynamic_voxelize_forward_cpu_parrots)

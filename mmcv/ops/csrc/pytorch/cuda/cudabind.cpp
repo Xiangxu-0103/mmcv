@@ -1469,7 +1469,7 @@ int NondeterministicHardVoxelizeForwardCUDAKernelLauncher(
 void DynamicVoxelizeForwardCUDAKernelLauncher(
     const at::Tensor& points, at::Tensor& coors,
     const std::vector<float> voxel_size, const std::vector<float> coors_range,
-    const int NDim = 3);
+    const int NDim = 3, const bool remove_outside_points = true);
 
 int hard_voxelize_forward_cuda(const at::Tensor& points, at::Tensor& voxels,
                                at::Tensor& coors,
@@ -1496,9 +1496,11 @@ int nondeterministic_hard_voxelize_forward_cuda(
 void dynamic_voxelize_forward_cuda(const at::Tensor& points, at::Tensor& coors,
                                    const std::vector<float> voxel_size,
                                    const std::vector<float> coors_range,
-                                   const int NDim) {
+                                   const int NDim,
+                                   const bool remove_outside_points) {
   DynamicVoxelizeForwardCUDAKernelLauncher(points, coors, voxel_size,
-                                           coors_range, NDim);
+                                           coors_range, NDim,
+                                           remove_outside_points);
 };
 
 int hard_voxelize_forward_impl(const at::Tensor& points, at::Tensor& voxels,
@@ -1518,7 +1520,8 @@ int nondeterministic_hard_voxelize_forward_impl(
 void dynamic_voxelize_forward_impl(const at::Tensor& points, at::Tensor& coors,
                                    const std::vector<float> voxel_size,
                                    const std::vector<float> coors_range,
-                                   const int NDim);
+                                   const int NDim,
+                                   const bool remove_outside_points);
 
 REGISTER_DEVICE_IMPL(hard_voxelize_forward_impl, CUDA,
                      hard_voxelize_forward_cuda);

@@ -28,9 +28,10 @@ int nondeterministic_hard_voxelize_forward_impl(
 void dynamic_voxelize_forward_impl(const at::Tensor &points, at::Tensor &coors,
                                    const std::vector<float> voxel_size,
                                    const std::vector<float> coors_range,
-                                   const int NDim = 3) {
+                                   const int NDim = 3,
+                                   const bool remove_outside_points) {
   DISPATCH_DEVICE_IMPL(dynamic_voxelize_forward_impl, points, coors, voxel_size,
-                       coors_range, NDim);
+                       coors_range, NDim, remove_outside_points);
 }
 
 void hard_voxelize_forward(const at::Tensor &points,
@@ -62,7 +63,8 @@ void hard_voxelize_forward(const at::Tensor &points,
 void dynamic_voxelize_forward(const at::Tensor &points,
                               const at::Tensor &voxel_size,
                               const at::Tensor &coors_range, at::Tensor &coors,
-                              const int NDim = 3) {
+                              const int NDim = 3,
+                              const bool remove_outside_points = true) {
   std::vector<float> voxel_size_v(
       voxel_size.data_ptr<float>(),
       voxel_size.data_ptr<float>() + voxel_size.numel());
@@ -70,5 +72,5 @@ void dynamic_voxelize_forward(const at::Tensor &points,
       coors_range.data_ptr<float>(),
       coors_range.data_ptr<float>() + coors_range.numel());
   dynamic_voxelize_forward_impl(points, coors, voxel_size_v, coors_range_v,
-                                NDim);
+                                NDim, remove_outside_points);
 }

@@ -7,40 +7,57 @@ void dynamic_voxelize_forward_cpu_kernel(
     const torch::TensorAccessor<T, 2> points,
     torch::TensorAccessor<T_int, 2> coors, const std::vector<float> voxel_size,
     const std::vector<float> coors_range, const std::vector<int> grid_size,
-    const int num_points, const int num_features, const int NDim) {
+    const int num_points, const int num_features, const int NDim,
+    const bool remove_outside_points = true) {
   const int ndim_minus_1 = NDim - 1;
-  bool failed = false;
-  // int coor[NDim];
-  int* coor = new int[NDim]();
-  int c;
+  if (remove_outside_points) {
+    bool failed = false;
+    // int coor[NDim];
+    int* coor = new int[NDim]();
+    int c;
 
-  for (int i = 0; i < num_points; ++i) {
-    failed = false;
-    for (int j = 0; j < NDim; ++j) {
-      c = floor((points[i][j] - coors_range[j]) / voxel_size[j]);
-      // necessary to rm points out of range
-      if ((c < 0 || c >= grid_size[j])) {
-        failed = true;
-        break;
+    for (int i = 0; i < num_points; ++i) {
+      failed = false;
+      for (int j = 0; j < NDim; ++j) {
+        c = floor((points[i][j] - coors_range[j]) / voxel_size[j]);
+        // necessary to rm points out of range
+        if ((c < 0 || c >= grid_size[j])) {
+          failed = true;
+          break;
+        }
+        coor[ndim_minus_1 - j] = c;
       }
-      coor[ndim_minus_1 - j] = c;
+
+      // memcpy and memset will cause problem because of the memory distribution
+      // discontinuity of TensorAccessor, so here using loops to replace memcpy
+      // or memset
+      if (failed) {
+        for (int k = 0; k < NDim; ++k) {
+          coors[i][k] = -1;
+        }
+      } else {
+        for (int k = 0; k < NDim; ++k) {
+          coors[i][k] = coor[k];
+        }
+      }
     }
 
-    // memcpy and memset will cause problem because of the memory distribution
-    // discontinuity of TensorAccessor, so here using loops to replace memcpy
-    // or memset
-    if (failed) {
-      for (int k = 0; k < NDim; ++k) {
-        coors[i][k] = -1;
-      }
-    } else {
-      for (int k = 0; k < NDim; ++k) {
-        coors[i][k] = coor[k];
+    delete[] coor;
+  } else {
+    int c;
+    for (int i = 0; i < num_points; i++) {
+      for (int j = 0; j < NDim; j++) {
+        c = floor((points[i][j] - coors_range[j]) / voxel_size[j]);
+        if (c < 0) {
+          coors[i][ndim_minus_1 - j] = 0;
+        } else if (c >= grid_size[j]) {
+          coors[i][ndim_minus_1 - j] = grid_size[j];
+        } else {
+          coors[i][ndim_minus_1 - j] = c;
+        }
       }
     }
   }
-
-  delete[] coor;
   return;
 }
 
@@ -106,7 +123,8 @@ void hard_voxelize_forward_cpu_kernel(
 void dynamic_voxelize_forward_cpu(const at::Tensor& points, at::Tensor& coors,
                                   const std::vector<float> voxel_size,
                                   const std::vector<float> coors_range,
-                                  const int NDim = 3) {
+                                  const int NDim = 3,
+                                  const bool remove_outside_points = true) {
   // check device
   AT_ASSERTM(points.device().is_cpu(), "points must be a CPU tensor");
 
@@ -124,7 +142,8 @@ void dynamic_voxelize_forward_cpu(const at::Tensor& points, at::Tensor& coors,
       points.scalar_type(), "dynamic_voxelize_forward_cpu_kernel", [&] {
         dynamic_voxelize_forward_cpu_kernel<scalar_t, int>(
             points.accessor<scalar_t, 2>(), coors.accessor<int, 2>(),
-            voxel_size, coors_range, grid_size, num_points, num_features, NDim);
+            voxel_size, coors_range, grid_size, num_points, num_features, NDim,
+            remove_outside_points);
       });
 }
 
@@ -179,7 +198,8 @@ int hard_voxelize_forward_impl(const at::Tensor& points, at::Tensor& voxels,
 void dynamic_voxelize_forward_impl(const at::Tensor& points, at::Tensor& coors,
                                    const std::vector<float> voxel_size,
                                    const std::vector<float> coors_range,
-                                   const int NDim);
+                                   const int NDim,
+                                   const bool remove_outside_points);
 REGISTER_DEVICE_IMPL(hard_voxelize_forward_impl, CPU,
                      hard_voxelize_forward_cpu);
 REGISTER_DEVICE_IMPL(dynamic_voxelize_forward_impl, CPU,

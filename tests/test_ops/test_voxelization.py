@@ -31,11 +31,11 @@ def test_voxelization(device_type):
 
     points = torch.tensor(points)
     max_num_points = -1
-    dynamic_voxelization = Voxelization(voxel_size, point_cloud_range,
-                                        max_num_points)
+    dynamic_voxelization = Voxelization(
+        point_cloud_range, max_num_points, voxel_size=voxel_size)
     max_num_points = 1000
-    hard_voxelization = Voxelization(voxel_size, point_cloud_range,
-                                     max_num_points)
+    hard_voxelization = Voxelization(
+        point_cloud_range, max_num_points, voxel_size=voxel_size)
 
     device = torch.device(device_type)
 
@@ -74,16 +74,16 @@ def test_voxelization_nondeterministic():
 
     points = torch.tensor(points)
     max_num_points = -1
-    dynamic_voxelization = Voxelization(voxel_size, point_cloud_range,
-                                        max_num_points)
+    dynamic_voxelization = Voxelization(
+        point_cloud_range, max_num_points, voxel_size=voxel_size)
 
     max_num_points = 10
     max_voxels = 50
     hard_voxelization = Voxelization(
-        voxel_size,
         point_cloud_range,
         max_num_points,
-        max_voxels,
+        voxel_size=voxel_size,
+        max_voxels=max_voxels,
         deterministic=False)
 
     # test hard_voxelization (non-deterministic version) on gpu
@@ -137,3 +137,34 @@ def test_voxelization_nondeterministic():
     coors_all_set = {tuple(c) for c in coors_all}
 
     assert len(coors_set) == len(coors) == len(coors_all_set)
+
+
+@pytest.mark.parametrize('device_type', [
+    'cpu',
+    pytest.param(
+        'cuda:0',
+        marks=pytest.mark.skipif(
+            not torch.cuda.is_available(), reason='requires CUDA support'))
+])
+def test_seg_voxelization(device_type):
+    grid_size = [140, 160, 8]
+    point_cloud_range = [0, -40, -3, 70.4, 40, 1]
+
+    voxel_dict = np.load(
+        'tests/data/for_3d_ops/test_voxel.npy', allow_pickle=True).item()
+    points = voxel_dict['points']
+
+    min_bound = np.asarray(point_cloud_range[:3])
+    max_bound = np.asarray(point_cloud_range[3:])
+    clamp_points = points[:, :3]
+    clamp_points = np.clip(clamp_points, min_bound,
+                           max_bound)
+    voxel_size = (max_bound - min_bound) / (np.asarray(grid_size) - 1)
+    expected_coors = np.floor((clamp_points - min_bound) / voxel_size).astype(int)
+
+    points = torch.tensor(points)
+    dynamic_voxelization = Voxelization(
+        point_cloud_range, -1, grid_size=grid_size)
+    coors = dynamic_voxelization.forward(points)
+    coors = coors.cpu().detach().numpy()
+    assert np.all(expected_coors == coors[:, ::-1])

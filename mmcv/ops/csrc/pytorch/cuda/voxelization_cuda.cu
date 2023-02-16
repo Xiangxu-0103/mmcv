@@ -48,7 +48,7 @@ int HardVoxelizeForwardCUDAKernelLauncher(
             temp_coors.contiguous().data_ptr<int>(), voxel_x, voxel_y, voxel_z,
             coors_x_min, coors_y_min, coors_z_min, coors_x_max, coors_y_max,
             coors_z_max, grid_x, grid_y, grid_z, num_points, num_features,
-            NDim);
+            NDim, true);
       }));
 
   AT_CUDA_CHECK(cudaGetLastError());
@@ -188,7 +188,7 @@ int NondeterministicHardVoxelizeForwardCUDAKernelLauncher(
             temp_coors.contiguous().data_ptr<int>(), voxel_x, voxel_y, voxel_z,
             coors_x_min, coors_y_min, coors_z_min, coors_x_max, coors_y_max,
             coors_z_max, grid_x, grid_y, grid_z, num_points, num_features,
-            NDim);
+            NDim, true);
       }));
 
   at::Tensor coors_map;
@@ -246,7 +246,7 @@ int NondeterministicHardVoxelizeForwardCUDAKernelLauncher(
 void DynamicVoxelizeForwardCUDAKernelLauncher(
     const at::Tensor &points, at::Tensor &coors,
     const std::vector<float> voxel_size, const std::vector<float> coors_range,
-    const int NDim = 3) {
+    const int NDim = 3, const bool remove_outside_points = true) {
   // current version tooks about 0.04s for one frame on cpu
   // check device
 
@@ -279,7 +279,8 @@ void DynamicVoxelizeForwardCUDAKernelLauncher(
         points.contiguous().data_ptr<scalar_t>(),
         coors.contiguous().data_ptr<int>(), voxel_x, voxel_y, voxel_z,
         coors_x_min, coors_y_min, coors_z_min, coors_x_max, coors_y_max,
-        coors_z_max, grid_x, grid_y, grid_z, num_points, num_features, NDim);
+        coors_z_max, grid_x, grid_y, grid_z, num_points, num_features, NDim,
+        remove_outside_points);
   });
 
   AT_CUDA_CHECK(cudaGetLastError());
